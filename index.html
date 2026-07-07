@@ -202,6 +202,34 @@ table.dataTable thead th{font-weight:600;color:var(--navy);border-bottom:2px sol
   transition:transform .35s cubic-bezier(.2,.9,.3,1.2);max-width:90vw;display:flex;align-items:center;gap:9px}
 .toast.show{transform:translateX(-50%) translateY(0)}
 .toast .tk{width:21px;height:21px;border-radius:50%;background:var(--green);color:#fff;display:grid;place-items:center;font-size:.78rem;flex:none}
+/* Sidebar sektor */
+.sbov{position:fixed;inset:0;background:rgba(14,27,52,.5);z-index:65;opacity:0;pointer-events:none;transition:opacity .25s}
+.sbov.show{opacity:1;pointer-events:auto}
+.sbar{position:fixed;top:0;right:0;height:100%;width:min(460px,92vw);background:var(--paper);z-index:66;
+  box-shadow:-20px 0 50px -20px rgba(0,0,0,.5);transform:translateX(100%);transition:transform .3s cubic-bezier(.3,.9,.3,1);
+  display:flex;flex-direction:column}
+.sbar.show{transform:translateX(0)}
+.sbhd{background:linear-gradient(160deg,var(--ink),var(--navy));color:#f4efe4;padding:18px 20px;border-bottom:3px solid var(--brass);position:relative;flex:none}
+.sbhd .ew{color:var(--brass-2)}
+.sbhd h3{font-family:'Fraunces',serif;font-weight:600;margin:.25rem 0 0;font-size:1.15rem;padding-right:34px;line-height:1.2}
+.sbhd .sbx{position:absolute;top:16px;right:16px;width:30px;height:30px;border:none;border-radius:8px;background:rgba(215,178,107,.2);color:var(--brass-2);font-size:1.1rem;cursor:pointer;line-height:1}
+.sbhd .sbx:hover{background:rgba(215,178,107,.35)}
+.sbstat{display:flex;gap:8px;padding:12px 20px;background:var(--paper-2);border-bottom:1px solid var(--line);flex:none;flex-wrap:wrap}
+.sbstat .sc{flex:1;min-width:70px;text-align:center;background:var(--card);border:1px solid var(--line);border-radius:9px;padding:8px 4px}
+.sbstat .sc .n{font-family:'Fraunces',serif;font-weight:600;font-size:1.3rem;line-height:1}
+.sbstat .sc .l{font-size:.62rem;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-top:2px}
+.sbbody{overflow-y:auto;padding:14px 16px;flex:1}
+.sbfilter{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
+.sbfilter button{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:5px 12px;font-family:inherit;font-size:.74rem;font-weight:600;cursor:pointer;color:var(--muted)}
+.sbfilter button.on{background:var(--navy);color:#f4efe4;border-color:var(--navy)}
+.sbitem{border:1px solid var(--line);border-left:4px solid var(--brass);border-radius:11px;background:var(--card);padding:12px 13px;margin-bottom:10px}
+.sbitem .top{display:flex;justify-content:space-between;gap:8px;align-items:start;margin-bottom:6px}
+.sbitem .isu{font-weight:600;font-size:.87rem;line-height:1.3}
+.sbitem .int{font-size:.82rem;color:var(--text);margin:3px 0 7px}
+.sbitem .int b{color:var(--brass);font-weight:600}
+.sbitem .meta{font-size:.72rem;color:var(--muted);display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.sbitem .mtag{background:var(--paper-2);padding:2px 8px;border-radius:999px}
+.sbempty{text-align:center;color:var(--muted);font-size:.85rem;padding:30px 10px}
 .sklist{margin:0;padding:6px 6px 6px 34px;max-height:230px;overflow-y:auto;counter-reset:none}
 .sklist li{padding:7px 8px;border-bottom:1px solid var(--line);font-size:.86rem}
 .sklist li:last-child{border-bottom:none}
@@ -255,6 +283,15 @@ footer{text-align:center;padding:24px 16px 32px;color:var(--muted);font-size:.72
   <div class="mbd" id="mbody"></div>
   <div class="mft"><button onclick="closeModal()">Tutup</button></div>
 </div></div>
+<div class="sbov" id="sbov" onclick="closeSidebar()"></div>
+<div class="sbar" id="sbar">
+  <div class="sbhd"><span class="ew">Tindakan Sektor</span>
+    <h3 id="sbTitle"></h3>
+    <button class="sbx" onclick="closeSidebar()">✕</button></div>
+  <div class="sbstat" id="sbStat"></div>
+  <div class="sbfilter" id="sbFilter"></div>
+  <div class="sbbody" id="sbBody"></div>
+</div>
 <div class="toast" id="toast"><span class="tk">✓</span><span id="tmsg"></span></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
@@ -1174,6 +1211,36 @@ function openModal(rep){
   $('#overlay').classList.add('show');
 }
 function closeModal(){$('#overlay').classList.remove('show');}
+
+/* ---- Sidebar isu ikut sektor ---- */
+let SB_SEK='',SB_FIL='';
+function openSidebar(sektor){
+  SB_SEK=sektor;SB_FIL='';
+  $('#sbTitle').textContent=sektor;
+  $('#sbov').classList.add('show');$('#sbar').classList.add('show');
+  renderSidebar();
+}
+function closeSidebar(){$('#sbov').classList.remove('show');$('#sbar').classList.remove('show');}
+function renderSidebar(){
+  const all=TINDAKAN.filter(t=>t.sektor===SB_SEK);
+  const sel=all.filter(t=>t.status==='Selesai').length;
+  const tin=all.filter(t=>t.status==='Dalam tindakan').length;
+  const tan=all.filter(t=>t.status==='Tertangguh').length;
+  $('#sbStat').innerHTML=[
+    ['Jumlah',all.length,'var(--navy)'],['Selesai',sel,'var(--green)'],
+    ['Tindakan',tin,'var(--amber)'],['Tangguh',tan,'var(--red)']
+  ].map(([l,n,c])=>`<div class="sc"><div class="n" style="color:${c}">${n}</div><div class="l">${l}</div></div>`).join('');
+  const fils=[['','Semua'],['Dalam tindakan','Tindakan'],['Selesai','Selesai'],['Tertangguh','Tangguh']];
+  $('#sbFilter').innerHTML=fils.map(([v,l])=>`<button class="${SB_FIL===v?'on':''}" onclick="sbSetFil('${v}')">${l}</button>`).join('');
+  let items=all;if(SB_FIL)items=items.filter(t=>t.status===SB_FIL);
+  items.sort((a,b)=>b.minggu-a.minggu);
+  $('#sbBody').innerHTML=items.length?items.map(t=>`<div class="sbitem">
+    <div class="top"><div class="isu">${t.isu}</div><span class="badge ${bc(t.status)}">${t.status}</span></div>
+    <div class="int"><b>Intervensi:</b> ${t.intervensi}</div>
+    <div class="meta"><span class="mtag">M${t.minggu}</span><span class="mtag">${t.ppd}</span>${t.sekolah?`<span class="mtag">${t.sekolah}</span>`:''}${t.catatan?`<span class="mtag">📝 ${t.catatan}</span>`:''}</div>
+  </div>`).join(''):'<div class="sbempty">Tiada isu untuk penapis ini.</div>';
+}
+function sbSetFil(v){SB_FIL=v;renderSidebar();}
 $('#overlay').addEventListener('click',e=>{if(e.target.id==='overlay')closeModal();});
 
 /* ============================================================
@@ -1352,8 +1419,7 @@ function vS4PD(){
       <div class="skgrid" id="skGrid"></div></section>
 
     <section>
-      <div class="stitle"><h3>Semua Tindakan</h3>
-        <button class="tab" id="clrSek" style="display:none;padding:5px 11px;font-size:.75rem">✕ buang tapisan</button></div>
+      <div class="stitle"><h3>Semua Tindakan</h3></div>
       <div class="panel">
         <div class="filters">
           <div class="f"><label>Minggu</label><select id="fMggu"><option value="">Semua</option>${Array.from({length:CW},(_,i)=>`<option value="M${i+1}">Minggu ${i+1}</option>`).join('')}</select></div>
@@ -1456,12 +1522,7 @@ function renderSkGrid(){
       <div class="skbar"><i style="width:${p(r.sel)}%;background:var(--green)"></i><i style="width:${p(r.tin)}%;background:var(--amber)"></i><i style="width:${p(r.tan)}%;background:var(--red)"></i></div>
       <div class="skleg"><span><b style="color:var(--green)">${r.sel}</b> selesai</span><span><b style="color:var(--amber)">${r.tin}</b> tindakan</span><span><b style="color:var(--red)">${r.tan}</b> tangguh</span></div></div>`;
   }).join('');
-  $$('.skcard').forEach(c=>c.onclick=()=>{const s=c.dataset.s;activeSek=activeSek===s?'':s;
-    $$('.skcard').forEach(x=>x.classList.toggle('active',x.dataset.s===activeSek&&!!activeSek));
-    $('#clrSek').style.display=activeSek?'inline-block':'none';
-    if(dtI)dtI.column(5).search(activeSek?'^'+activeSek.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'$':'',true,false).draw();
-  });
-  $('#clrSek').onclick=()=>{activeSek='';$$('.skcard').forEach(x=>x.classList.remove('active'));$('#clrSek').style.display='none';if(dtI)dtI.column(5).search('').draw();};
+  $$('.skcard').forEach(c=>c.onclick=()=>openSidebar(c.dataset.s));
 }
 
 function renderTbl(){
@@ -1548,8 +1609,7 @@ function vDash(isAdmin){
     <section><div class="stitle"><h3>Trend Kepatuhan Mingguan</h3></div>
       <div class="panel"><div class="chart-box"><canvas id="dCht"></canvas></div></div></section>
     <section>
-      <div class="stitle"><h3>Semua Tindakan</h3>
-        <button class="tab" id="dClr" style="display:none;padding:5px 11px;font-size:.75rem">✕ buang tapisan</button></div>
+      <div class="stitle"><h3>Semua Tindakan</h3></div>
       <div class="panel">
         <div class="filters">
           <div class="f"><label>Minggu</label><select id="dMggu"><option value="">Semua</option>${Array.from({length:CW},(_,i)=>`<option value="M${i+1}">Minggu ${i+1}</option>`).join('')}</select></div>
@@ -1576,11 +1636,7 @@ function vDash(isAdmin){
   let actD='';
   const skR=SEKTOR.map(s=>{const it=TINDAKAN.filter(f=>f.sektor===s);return{s,n:it.length,sel:it.filter(i=>i.status==='Selesai').length,tin:it.filter(i=>i.status==='Dalam tindakan').length,tan:it.filter(i=>i.status==='Tertangguh').length};}).filter(r=>r.n>0).sort((a,b)=>b.n-a.n);
   $('#dSkGrid').innerHTML=skR.map(r=>{const p=n=>r.n?n/r.n*100:0;return `<div class="skcard" data-sd="${r.s}"><div class="skn">${r.s}</div><div class="skc">${r.n}<small> isu</small></div><div class="skbar"><i style="width:${p(r.sel)}%;background:var(--green)"></i><i style="width:${p(r.tin)}%;background:var(--amber)"></i><i style="width:${p(r.tan)}%;background:var(--red)"></i></div><div class="skleg"><span><b style="color:var(--green)">${r.sel}</b> selesai</span><span><b style="color:var(--amber)">${r.tin}</b> tindakan</span><span><b style="color:var(--red)">${r.tan}</b> tangguh</span></div></div>`;}).join('');
-  $$('[data-sd]').forEach(c=>c.onclick=()=>{const s=c.dataset.sd;actD=actD===s?'':s;
-    $$('[data-sd]').forEach(x=>x.classList.toggle('active',x.dataset.sd===actD&&!!actD));
-    $('#dClr').style.display=actD?'inline-block':'none';
-    if(dtI)dtI.column(5).search(actD?'^'+actD.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'$':'',true,false).draw();});
-  $('#dClr').onclick=()=>{actD='';$$('[data-sd]').forEach(x=>x.classList.remove('active'));$('#dClr').style.display='none';if(dtI)dtI.column(5).search('').draw();};
+  $$('[data-sd]').forEach(c=>c.onclick=()=>openSidebar(c.dataset.sd));
 
   /* ledger */
   const weeks=Array.from({length:CW},(_,i)=>i+1);

@@ -202,6 +202,10 @@ table.dataTable thead th{font-weight:600;color:var(--navy);border-bottom:2px sol
   transition:transform .35s cubic-bezier(.2,.9,.3,1.2);max-width:90vw;display:flex;align-items:center;gap:9px}
 .toast.show{transform:translateX(-50%) translateY(0)}
 .toast .tk{width:21px;height:21px;border-radius:50%;background:var(--green);color:#fff;display:grid;place-items:center;font-size:.78rem;flex:none}
+.sklist{margin:0;padding:6px 6px 6px 34px;max-height:230px;overflow-y:auto;counter-reset:none}
+.sklist li{padding:7px 8px;border-bottom:1px solid var(--line);font-size:.86rem}
+.sklist li:last-child{border-bottom:none}
+.sklist li::marker{color:var(--brass);font-weight:600;font-size:.8rem}
 .pagepad{padding-bottom:56px}
 footer{text-align:center;padding:24px 16px 32px;color:var(--muted);font-size:.72rem}
 .modNote{background:rgba(215,178,107,.12);border:1px solid rgba(185,138,62,.35);color:#7a5c1e;border-radius:9px;padding:8px 12px;font-size:.75rem;text-align:center;margin-bottom:16px;display:none}
@@ -1079,7 +1083,12 @@ const SEK_MAP=['Sektor Pembelajaran','Sektor Pembelajaran','Sektor Pembelajaran'
 const STAT=['Selesai','Selesai','Dalam tindakan','Dalam tindakan','Tertangguh'];
 
 (function buildDemo(){
+  // PPD KOTA SETAR sengaja dikosongkan supaya demo login PPD bermula bersih
+  // (tunjuk pengalaman sebenar PPD yang belum lapor). PPD lain ada data
+  // supaya paparan S4PD & Pengurusan tetap menunjukkan keseluruhan sistem.
+  const PPD_KOSONG='PPD KOTA SETAR';
   PPDS.forEach(ppd=>{
+    if(ppd===PPD_KOSONG)return;
     const sk=SEKOLAH_REF.filter(s=>s.ppd===ppd);
     for(let w=1;w<=CW;w++){
       const rate=w===CW?0.7:0.85;
@@ -1173,7 +1182,7 @@ $('#overlay').addEventListener('click',e=>{if(e.target.id==='overlay')closeModal
 function vPPD(){
   const me=ME;const myR=REPORTS.filter(r=>r.ppd===me.ppd).sort((a,b)=>b.minggu-a.minggu);
   const lapor=new Set(myR.map(r=>r.minggu));
-  const skOpts=SEKOLAH_REF.filter(s=>s.ppd===me.ppd).map(s=>`<option value="${s.nama}">${s.nama}</option>`).join('');
+  const skOpts=SEKOLAH_REF.filter(s=>s.ppd===me.ppd).sort((a,b)=>a.nama.localeCompare(b.nama,'ms')).map(s=>`<option value="${s.nama}">${s.nama}</option>`).join('');
   let pills='';for(let w=1;w<=CW;w++)pills+=`<div class="wpill ${lapor.has(w)?'ok':'no'}">${w}</div>`;
   const dibimbing=[...new Set(myR.map(r=>r.sekolah).filter(Boolean))];
   const sekOpt='<option value="">Pilih sektor bertanggungjawab (pilihan)…</option>'+SEKTOR.map(s=>`<option>${s}</option>`).join('');
@@ -1184,10 +1193,10 @@ function vPPD(){
     <section><div class="stats" id="pStats"></div></section>
 
     <section><div class="stitle"><h3>Status Kepatuhan</h3><span class="note">${lapor.size}/${CW} minggu dilaporkan</span></div>
-      <div class="panel"><div class="wpills">${pills}</div>
-        ${dibimbing.length?`<p style="font-size:.76rem;color:var(--muted);margin:10px 0 5px;font-weight:600">Sekolah pernah dibimbing:</p>
-        <div>${dibimbing.map(s=>`<span class="tag" style="margin:2px 3px">${s}</span>`).join('')}</div>`:''}
-      </div></section>
+      <div class="panel"><div class="wpills">${pills}</div></div></section>
+
+    ${dibimbing.length?`<section><div class="stitle"><h3>Sekolah Telah Dibimbing</h3><span class="note">${dibimbing.length} sekolah</span></div>
+      <div class="panel" style="padding:0"><ol class="sklist">${dibimbing.slice().sort((a,b)=>a.localeCompare(b,'ms')).map(s=>`<li>${s}</li>`).join('')}</ol></div></section>`:''}
 
     <section><div class="stitle"><h3>Laporan Baharu</h3>
       <span class="note">Bangkit isu daripada dialog bimbingan terkini</span></div>
@@ -1284,19 +1293,8 @@ function vPPD(){
         REPORTS.push({id:rID,minggu:m,ppd:ME.ppd,tarikh:ti.value,sekolah,guru:$('#fguru').value.trim(),issues:full});
         toast(`Laporan Minggu ${m} (${issues.length} isu) dihantar. S4PD akan kelompok ke sektor.`);
       }
-      ti.value='';chip.style.display='none';$('#fsekolah').value='';$('#fguru').value='';
-      IL.innerHTML='';addRow();renderHist();
-      /* kemas stats */
-      const jI2=REPORTS.filter(r=>r.ppd===ME.ppd).reduce((a,r)=>a+r.issues.length,0);
-      const jS2=TINDAKAN.filter(t=>t.ppd===ME.ppd&&t.status==='Selesai').length;
-      const lp2=new Set(REPORTS.filter(r=>r.ppd===ME.ppd).map(r=>r.minggu));
-      $('#pStats').innerHTML=[
-        {lbl:'Laporan dihantar',num:REPORTS.filter(r=>r.ppd===ME.ppd).length,sub:`${CW} minggu program`,cls:''},
-        {lbl:'Jumlah isu dibangkit',num:jI2,sub:'sepanjang program',cls:''},
-        {lbl:'Isu diselesaikan',num:jS2,sub:'status Selesai',cls:jS2?'good':''},
-        {lbl:'Minggu belum lapor',num:CW-lp2.size,sub:'minggu tercicir',cls:(CW-lp2.size)?'warn':'good'},
-      ].map(c=>`<div class="stat ${c.cls}"><div class="lbl">${c.lbl}</div><div class="num">${c.num}</div><div class="sub">${c.sub}</div></div>`).join('');
-    }finally{btn.disabled=false;btn.textContent='Hantar laporan';}
+      vPPD(); // render semula keseluruhan paparan PPD (stats, kepatuhan, sekolah dibimbing, sejarah)
+    }finally{const b=$('#hantarBtn');if(b){b.disabled=false;b.textContent='Hantar laporan';}}
   };
 
   function renderHist(){

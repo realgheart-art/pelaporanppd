@@ -229,6 +229,14 @@ table.dataTable thead th{font-weight:600;color:var(--navy);border-bottom:2px sol
 .sbitem .int b{color:var(--brass);font-weight:600}
 .sbitem .meta{font-size:.72rem;color:var(--muted);display:flex;gap:6px;flex-wrap:wrap;align-items:center}
 .sbitem .mtag{background:var(--paper-2);padding:2px 8px;border-radius:999px}
+.sbedit{margin-top:9px;padding-top:9px;border-top:1px dashed var(--line)}
+.sbedit .ebtn{border:1px solid var(--brass);background:rgba(185,138,62,.08);color:var(--brass);border-radius:8px;padding:5px 11px;font-family:inherit;font-size:.74rem;font-weight:600;cursor:pointer}
+.sbedit .ebtn:hover{background:rgba(185,138,62,.18)}
+.sbedit .erow{display:flex;gap:6px;align-items:center;margin-top:2px}
+.sbedit select{flex:1;font-family:inherit;font-size:.78rem;padding:6px 9px;border:1px solid var(--brass);border-radius:8px;background:#fff}
+.sbedit .save{border:none;background:var(--navy);color:#f4efe4;border-radius:8px;padding:6px 12px;font-family:inherit;font-size:.74rem;font-weight:600;cursor:pointer;white-space:nowrap}
+.sbedit .save:hover{background:var(--navy-2)}
+.sbedit .cancel{border:1px solid var(--line);background:var(--paper);color:var(--muted);border-radius:8px;padding:6px 10px;font-family:inherit;font-size:.74rem;cursor:pointer}
 .sbempty{text-align:center;color:var(--muted);font-size:.85rem;padding:30px 10px}
 .sklist{margin:0;padding:6px 6px 6px 34px;max-height:230px;overflow-y:auto;counter-reset:none}
 .sklist li{padding:7px 8px;border-bottom:1px solid var(--line);font-size:.86rem}
@@ -1192,6 +1200,12 @@ async function doLogin(){
 function doLogout(){ME=null;cleanup();$('#app').classList.add('hidden');$('#ls').classList.remove('hidden');$('#lu').value='';$('#lp').value='';}
 function cleanup(){if(chI){chI.destroy();chI=null;}try{if(dtI)dtI.destroy();}catch(e){}try{if(dtM)dtM.destroy();}catch(e){}dtI=null;dtM=null;}
 
+/* Helper panggilan ke Google Apps Script (mod live) */
+async function api(action,payload){
+  const res=await fetch(CFG.GAS,{method:'POST',body:JSON.stringify(Object.assign({action:action},payload||{}))});
+  return await res.json();
+}
+
 /* ============================================================
    ROUTER
    ============================================================ */
@@ -1234,13 +1248,40 @@ function renderSidebar(){
   $('#sbFilter').innerHTML=fils.map(([v,l])=>`<button class="${SB_FIL===v?'on':''}" onclick="sbSetFil('${v}')">${l}</button>`).join('');
   let items=all;if(SB_FIL)items=items.filter(t=>t.status===SB_FIL);
   items.sort((a,b)=>b.minggu-a.minggu);
-  $('#sbBody').innerHTML=items.length?items.map(t=>`<div class="sbitem">
+  const boleh=ME&&(ME.peranan==='s4pd'||ME.peranan==='admin');
+  $('#sbBody').innerHTML=items.length?items.map(t=>`<div class="sbitem" id="sb-${t.id}">
     <div class="top"><div class="isu">${t.isu}</div><span class="badge ${bc(t.status)}">${t.status}</span></div>
     <div class="int"><b>Intervensi:</b> ${t.intervensi}</div>
     <div class="meta"><span class="mtag">M${t.minggu}</span><span class="mtag">${t.ppd}</span>${t.sekolah?`<span class="mtag">${t.sekolah}</span>`:''}${t.catatan?`<span class="mtag">📝 ${t.catatan}</span>`:''}</div>
+    ${boleh?`<div class="sbedit">
+      <button class="ebtn" onclick="sbEditToggle('${t.id}')">✎ Pindah sektor</button>
+      <div class="erow" id="ed-${t.id}" style="display:none">
+        <select id="es-${t.id}">${SEKTOR.map(s=>`<option value="${s}" ${s===t.sektor?'selected':''}>${s}</option>`).join('')}</select>
+        <button class="save" onclick="sbPindah('${t.id}')">Simpan</button>
+        <button class="cancel" onclick="sbEditToggle('${t.id}')">✕</button>
+      </div></div>`:''}
   </div>`).join(''):'<div class="sbempty">Tiada isu untuk penapis ini.</div>';
 }
 function sbSetFil(v){SB_FIL=v;renderSidebar();}
+function sbEditToggle(id){const r=$('#ed-'+id);if(r)r.style.display=r.style.display==='none'?'flex':'none';}
+async function sbPindah(id){
+  const sel=$('#es-'+id);if(!sel)return;
+  const baru=sel.value;const t=TINDAKAN.find(x=>x.id===id);
+  if(!t||baru===t.sektor){sbEditToggle(id);return;}
+  const lama=t.sektor;
+  try{
+    if(!CFG.DEMO){
+      const r=await api('triageIsu',{id:id,sektor:baru,oleh:ME.nama});
+      if(!r||!r.ok)throw new Error((r&&r.error)||'Gagal');
+    }
+    t.sektor=baru;
+    toast(`Isu dipindah: ${lama.replace('Sektor ','')} → ${baru.replace('Sektor ','')}`);
+    renderSidebar();
+    // kemas kini paparan di belakang mengikut peranan
+    if(ME.peranan==='s4pd'){renderS4Stats();renderSkGrid();refreshTbl();}
+    else if(ME.peranan==='admin'){cleanup();vDash(true);}
+  }catch(e){toast('Gagal memindah sektor: '+e.message,false);}
+}
 $('#overlay').addEventListener('click',e=>{if(e.target.id==='overlay')closeModal();});
 
 /* ============================================================
@@ -1533,6 +1574,11 @@ function renderTbl(){
   $('#fMggu').onchange=e=>dtI.column(0).search(e.target.value?'^'+e.target.value+'$':'',true,false).draw();
   $('#fPpd').onchange=e=>dtI.column(1).search(e.target.value).draw();
   $('#fStat').onchange=e=>dtI.column(6).search(e.target.value).draw();
+}
+function refreshTbl(){
+  if(!dtI)return;
+  const rows=TINDAKAN.slice().sort((a,b)=>b.minggu-a.minggu).map(t=>[`M${t.minggu}`,t.ppd,t.sekolah||'—',t.isu,t.intervensi,t.sektor||'—',`<span class="badge ${bc(t.status)}">${t.status}</span>`]);
+  dtI.clear();dtI.rows.add(rows);dtI.draw(false);
 }
 
 /* ============================================================

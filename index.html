@@ -451,7 +451,7 @@ $('#overlay').addEventListener('click',e=>{if(e.target.id==='overlay')closeModal
 function vPPD(){
   const me=ME;const myR=REPORTS.filter(r=>r.ppd===me.ppd).sort((a,b)=>b.minggu-a.minggu);
   const lapor=new Set(myR.map(r=>r.minggu));
-  const skOpts=SEKOLAH_REF.filter(s=>s.ppd===me.ppd).map(s=>`<option value="${s.nama}">`).join('');
+  const skOpts=SEKOLAH_REF.filter(s=>s.ppd===me.ppd).map(s=>`<option value="${s.nama}">${s.nama}</option>`).join('');
   let pills='';for(let w=1;w<=CW;w++)pills+=`<div class="wpill ${lapor.has(w)?'ok':'no'}">${w}</div>`;
   const dibimbing=[...new Set(myR.map(r=>r.sekolah).filter(Boolean))];
   const sekOpt='<option value="">Pilih sektor bertanggungjawab (pilihan)…</option>'+SEKTOR.map(s=>`<option>${s}</option>`).join('');
@@ -482,8 +482,10 @@ function vPPD(){
               <span><span class="ml">Minggu pelaporan</span><br><span class="ms" id="msub"></span></span>
             </div></div>
           <div class="field"><label>Sekolah dibimbing <span class="req">*</span></label>
-            <input id="fsekolah" list="skList" autocomplete="off" placeholder="Taip nama sekolah…">
-            <datalist id="skList">${skOpts}</datalist></div>
+            <select id="fsekolah">
+              <option value="">— Pilih sekolah —</option>
+              ${skOpts}
+            </select></div>
         </div>
         <div class="field"><label>Guru terlibat</label>
           <input id="fguru" type="text" placeholder="Nama guru (pilihan)"></div>

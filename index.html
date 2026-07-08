@@ -1127,7 +1127,8 @@ const SEK_MAP=['Sektor Pembelajaran','Sektor Pembelajaran','Sektor Pembelajaran'
   'Sektor Pendidikan Islam','Sektor Pengurusan Sekolah','Sektor Psikologi & Kaunseling','Sektor Pendidikan Khas'];
 const STAT=['Selesai','Selesai','Dalam tindakan','Dalam tindakan','Tertangguh'];
 
-(function buildDemo(){
+function buildDemo(){
+  REPORTS.length=0;TINDAKAN.length=0;rid=0;tid=0;seed=42;
   // PPD KOTA SETAR sengaja dikosongkan supaya demo login PPD bermula bersih
   // (tunjuk pengalaman sebenar PPD yang belum lapor). PPD lain ada data
   // supaya paparan S4PD & Pengurusan tetap menunjukkan keseluruhan sistem.
@@ -1153,7 +1154,30 @@ const STAT=['Selesai','Selesai','Dalam tindakan','Dalam tindakan','Tertangguh'];
       }
     }
   });
-})();
+}
+
+/* Muat data: mod demo jana automatik; mod live tarik dari Google Sheets.
+   PENTING: dalam mod live, nombor Minggu DIBACA dari Sheet (dikunci semasa
+   laporan dihantar) — jadi menukar PROGRAM_START tidak mengubah minggu
+   laporan lama. Sejarah kekal utuh. */
+async function loadData(){
+  if(CFG.DEMO){buildDemo();return;}
+  const b=await api('bootstrap',{});
+  if(!b||!b.ok)throw new Error((b&&b.error)||'Gagal muat data');
+  // sekolah & sektor dari Sheet (jika ada) — jika tidak, guna rujukan terbina
+  if(b.sektor&&b.sektor.length){SEKTOR.length=0;b.sektor.forEach(s=>SEKTOR.push(s));}
+  REPORTS.length=0;TINDAKAN.length=0;
+  (b.tindakan||[]).forEach(function(x){
+    TINDAKAN.push({id:x.ID,laporanId:x.LaporanID,minggu:Number(x.Minggu),ppd:x.PPD,
+      tarikh:String(x.Tarikh||'').slice(0,10),sekolah:x.Sekolah||'',isu:x.Isu,intervensi:x.Intervensi,
+      sektor:x.Sektor||'',status:x.Status||'Belum Ditetapkan',catatan:x.Catatan||''});
+  });
+  (b.laporan||[]).forEach(function(L){
+    const id=L.ID;
+    REPORTS.push({id:id,minggu:Number(L.Minggu),ppd:L.PPD,tarikh:String(L.Tarikh||'').slice(0,10),
+      sekolah:L.Sekolah||'',guru:L.Guru||'',issues:TINDAKAN.filter(t=>t.laporanId===id)});
+  });
+}
 const hasRep=(ppd,w)=>REPORTS.find(r=>r.ppd===ppd&&r.minggu===w);
 const belumTriage=()=>TINDAKAN.filter(t=>!t.sektor);
 
@@ -1195,7 +1219,7 @@ async function doLogin(){
   const mn=$('#modNote');
   if(CFG.DEMO){mn.textContent='Mod Demo — data dijana automatik. Tukar CFG.DEMO=false selepas setup Google Sheets.';mn.classList.add('show');}
   else{mn.classList.remove('show');}
-  route();
+  await route();
 }
 function doLogout(){ME=null;cleanup();$('#app').classList.add('hidden');$('#ls').classList.remove('hidden');$('#lu').value='';$('#lp').value='';}
 function cleanup(){if(chI){chI.destroy();chI=null;}try{if(dtI)dtI.destroy();}catch(e){}try{if(dtM)dtM.destroy();}catch(e){}dtI=null;dtM=null;}
@@ -1209,7 +1233,11 @@ async function api(action,payload){
 /* ============================================================
    ROUTER
    ============================================================ */
-function route(){cleanup();const r=ME.peranan;
+async function route(){
+  cleanup();
+  try{await loadData();}
+  catch(e){toast('Gagal memuat data: '+e.message,false);return;}
+  const r=ME.peranan;
   if(r==='ppd')vPPD();else if(r==='s4pd')vS4PD();else if(r==='meja')vMeja();
   else if(r==='pengurusan')vDash(false);else if(r==='admin')vAdmin();}
 
@@ -1400,8 +1428,16 @@ function vPPD(){
           isu:i.isu,intervensi:i.intervensi,sektor:i.sektor,status:i.sektor?i.status:'Belum Ditetapkan',catatan:''};TINDAKAN.push(tk);return tk;});
         REPORTS.push({id:rID,minggu:m,ppd:ME.ppd,tarikh:ti.value,sekolah,guru:$('#fguru').value.trim(),issues:full});
         toast(`Laporan Minggu ${m} (${issues.length} isu) dihantar. S4PD akan kelompok ke sektor.`);
+      }else{
+        // minggu 'm' dikira sekali di sini & disimpan kekal dalam Sheet (dikunci)
+        const r=await api('submitLaporan',{data:{minggu:m,ppd:ME.ppd,tarikh:ti.value,
+          sekolah:sekolah,guru:$('#fguru').value.trim(),issues:issues}});
+        if(!r||!r.ok)throw new Error((r&&r.error)||'Hantar gagal');
+        await loadData();
+        toast(`Laporan Minggu ${m} (${issues.length} isu) dihantar. S4PD akan kelompok ke sektor.`);
       }
       vPPD(); // render semula keseluruhan paparan PPD (stats, kepatuhan, sekolah dibimbing, sejarah)
+    }catch(e){toast('Gagal menghantar: '+e.message,false);
     }finally{const b=$('#hantarBtn');if(b){b.disabled=false;b.textContent='Hantar laporan';}}
   };
 
@@ -1506,17 +1542,18 @@ function renderTriage(){
       <span class="sf" id="sf-${t.id}">ditetapkan ✓</span>
     </td></tr>`).join(''):'<tr><td colspan="6" style="text-align:center;padding:22px;color:var(--muted)">Semua isu telah ditetapkan sektor ✓</td></tr>')+'</tbody>';
   $('#triageTable').innerHTML=th+tb;
-  $$('.tri-sel').forEach(s=>s.onchange=()=>{
+  $$('.tri-sel').forEach(s=>s.onchange=async()=>{
     if(!s.value){return;}
     const t=TINDAKAN.find(x=>x.id===s.dataset.id);
     t.sektor=s.value;t.status='Dalam tindakan';
     s.classList.remove('unset');
+    if(!CFG.DEMO){try{await api('triageIsu',{id:t.id,sektor:t.sektor,oleh:ME.nama});}catch(e){toast('Gagal simpan sektor.',false);}}
     const f=$('#sf-'+t.id);if(f){f.classList.add('show');setTimeout(()=>f.classList.remove('show'),1400);}
     setTimeout(()=>{
       s.closest('tr').remove();
       const bt=belumTriage();
       $('#btNote').textContent=bt.length+' isu belum ditetapkan sektor';
-      renderS4Stats();renderSkGrid();if(dtI)dtI.draw();
+      renderS4Stats();renderSkGrid();refreshTbl();
     },900);
   });
 }
@@ -1625,8 +1662,10 @@ function vMeja(){
       <td><input data-id="${t.id}" class="mnote" value="${t.catatan}" placeholder="catatan…" style="width:130px;font-size:.77rem;padding:5px 8px;border:1px solid var(--line);border-radius:7px"></td>
       </tr>`).join(''):'<tr><td colspan="5" style="text-align:center;padding:22px;color:var(--muted)">Tiada isu sepadan.</td></tr>')+'</tbody>';
     $('#mejaTable').innerHTML=th+tb;
-    $$('.msel').forEach(s=>s.onchange=()=>{const t=TINDAKAN.find(x=>x.id===s.dataset.id);t.status=s.value;flash('msf-'+t.id);mStats();});
-    $$('.mnote').forEach(n=>n.onchange=()=>{const t=TINDAKAN.find(x=>x.id===n.dataset.id);t.catatan=n.value;flash('msf-'+t.id);});
+    $$('.msel').forEach(s=>s.onchange=async()=>{const t=TINDAKAN.find(x=>x.id===s.dataset.id);t.status=s.value;flash('msf-'+t.id);mStats();
+      if(!CFG.DEMO){try{await api('updateTindakan',{id:t.id,status:t.status,catatan:t.catatan,oleh:ME.nama});}catch(e){toast('Gagal simpan status.',false);}}});
+    $$('.mnote').forEach(n=>n.onchange=async()=>{const t=TINDAKAN.find(x=>x.id===n.dataset.id);t.catatan=n.value;flash('msf-'+t.id);
+      if(!CFG.DEMO){try{await api('updateTindakan',{id:t.id,status:t.status,catatan:t.catatan,oleh:ME.nama});}catch(e){toast('Gagal simpan catatan.',false);}}});
   }
   function flash(id){const f=$('#'+id);if(f){f.classList.add('show');setTimeout(()=>f.classList.remove('show'),1400);}}
   $('#mStat').onchange=drawMeja;$('#mPpd').onchange=drawMeja;
@@ -1749,6 +1788,13 @@ function aCfg(){
         <div class="field"><label>Tarikh mula program</label><input type="date" value="${CFG.START}" disabled></div>
         <div class="field"><label>Minggu semasa</label><input value="Minggu ${CW}" disabled></div>
       </div>
+      <div style="background:var(--abg);border:1px solid var(--amber);border-radius:9px;padding:11px 13px;font-size:.78rem;color:#7a5c1e;margin-top:2px">
+        <b>⚠ Nota penting tentang Tarikh Mula Program:</b> Nombor minggu setiap laporan
+        <b>dikunci</b> semasa laporan dihantar dan disimpan kekal dalam Google Sheet.
+        Menukar tarikh mula program <b>tidak memadam</b> laporan sedia ada, tetapi ia
+        akan mengubah kiraan "minggu semasa" untuk laporan baharu. Elakkan menukar tarikh
+        ini selepas program bermula supaya penjajaran minggu kekal konsisten.</div>
+      <div style="height:14px"></div>
       <div class="field"><label>10 PPD Kedah (${PPDS.length} aktif)</label>
         <div style="display:flex;flex-wrap:wrap;gap:5px">${PPDS.map(p=>`<span class="tag">${p}</span>`).join('')}</div></div>
       <div class="field"><label>14 Sektor JPN Kedah</label>
